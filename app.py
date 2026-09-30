@@ -93,7 +93,7 @@ def load_artifacts():
                         return cfg
 
                 class TransformerBlock(keras.layers.Layer):
-                    def __init__(self, d_model, num_heads, d_ff, dropout=0.1, **kwargs):
+                    def __init__(self, d_model, num_heads, d_ff, drop=0.1, **kwargs):
                         super().__init__(**kwargs)
                         self.attn = MultiHeadSelfAttention(d_model, num_heads)
                         self.ffn = keras.Sequential([
@@ -102,12 +102,12 @@ def load_artifacts():
                         ])
                         self.norm1 = keras.layers.LayerNormalization(epsilon=1e-6)
                         self.norm2 = keras.layers.LayerNormalization(epsilon=1e-6)
-                        self.drop1 = keras.layers.Dropout(dropout)
-                        self.drop2 = keras.layers.Dropout(dropout)
+                        self.drop1 = keras.layers.Dropout(drop)
+                        self.drop2 = keras.layers.Dropout(drop)
                         self.d_model = d_model
                         self.num_heads = num_heads
                         self.d_ff = d_ff
-                        self.dropout_rate = dropout
+                        self.dropout_rate = drop
 
                     def call(self, x, training=False):
                         x = self.norm1(x + self.drop1(self.attn(x), training=training))
@@ -116,16 +116,16 @@ def load_artifacts():
                     def get_config(self):
                         cfg = super().get_config()
                         cfg.update({'d_model': self.d_model, 'num_heads': self.num_heads,
-                                    'd_ff': self.d_ff, 'dropout': self.dropout_rate})
+                                    'd_ff': self.d_ff, 'drop': self.dropout_rate})
                         return cfg
 
                 class ChannelAttention(keras.layers.Layer):
-                    def __init__(self, filters, reduction=8, **kwargs):
+                    def __init__(self, channels, reduction=8, **kwargs):
                         super().__init__(**kwargs)
                         self.avg_pool = keras.layers.GlobalAveragePooling1D()
-                        self.fc1 = keras.layers.Dense(max(1, filters // reduction), activation='relu')
-                        self.fc2 = keras.layers.Dense(filters, activation='sigmoid')
-                        self.filters = filters
+                        self.fc1 = keras.layers.Dense(max(1, channels // reduction), activation='relu')
+                        self.fc2 = keras.layers.Dense(channels, activation='sigmoid')
+                        self.channels = channels
                         self.reduction = reduction
 
                     def call(self, x):
@@ -134,14 +134,14 @@ def load_artifacts():
 
                     def get_config(self):
                         cfg = super().get_config()
-                        cfg.update({'filters': self.filters, 'reduction': self.reduction})
+                        cfg.update({'channels': self.channels, 'reduction': self.reduction})
                         return cfg
 
                 custom_objects = {
                     'MultiHeadSelfAttention': MultiHeadSelfAttention,
                     'TransformerBlock': TransformerBlock,
                     'ChannelAttention': ChannelAttention,
-                    'loss': focal_loss()
+                    'loss_fn': focal_loss()
                 }
                 model = keras.models.load_model(model_path, custom_objects=custom_objects)
                 print(f"  [OK] Model loaded: {model_name}")
