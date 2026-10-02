@@ -2036,6 +2036,39 @@ document.getElementById('stockSymbol').addEventListener('keydown', e => {
 // ── PREDICT ──
 let priceChart = null;
 let currentStockData = [];
+const HF_API_BASE = 'https://adityabil-aureliusapp.hf.space/gradio_api';
+
+async function predictWithHuggingFace(symbol) {
+  const submit = await fetch(`${HF_API_BASE}/call/predict_ui`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({data: [symbol]})
+  });
+  if (!submit.ok) throw new Error(`Hugging Face request failed (${submit.status})`);
+
+  const {event_id: eventId} = await submit.json();
+  if (!eventId) throw new Error('Hugging Face did not return an event ID');
+
+  const resultResponse = await fetch(`${HF_API_BASE}/call/predict_ui/${eventId}`, {
+    headers: {'Accept': 'text/event-stream'}
+  });
+  const stream = await resultResponse.text();
+  const blocks = stream.split(/\r?\n\r?\n/);
+  const errorBlock = blocks.find(block => block.includes('event: error'));
+  if (errorBlock) {
+    const errorData = errorBlock.match(/^data:\s*(.*)$/m);
+    throw new Error(errorData ? errorData[1] : 'Hugging Face prediction failed');
+  }
+
+  const completeBlock = blocks.find(block => block.includes('event: complete'));
+  const dataLine = completeBlock && completeBlock.match(/^data:\s*(.*)$/m);
+  if (!dataLine) throw new Error('Hugging Face returned no prediction result');
+
+  const outputs = JSON.parse(dataLine[1]);
+  const details = outputs[0];
+  if (!details || details.error) throw new Error(details?.error || 'Prediction failed');
+  return details;
+}
 
 async function runPredict() {
   const sym = document.getElementById('stockSymbol').value.trim().toUpperCase();
@@ -2046,19 +2079,8 @@ async function runPredict() {
   showLoading(sym);
 
   try {
-    const res = await fetch('/api/predict', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ symbol: sym, news: [] })
-    });
-    const data = await res.json();
+    const data = await predictWithHuggingFace(sym);
     hideLoading();
-
-    if (!res.ok || data.error) {
-      showError(data.error || 'Prediction failed');
-      return;
-    }
-
     renderResults(data);
   } catch (err) {
     hideLoading();

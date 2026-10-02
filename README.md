@@ -1,3 +1,14 @@
+---
+title: Aurelius Stock Predictor
+emoji: 📈
+colorFrom: green
+colorTo: blue
+sdk: gradio
+app_file: gradio_app.py
+python_version: 3.12
+pinned: false
+---
+
 # Stock Price Movement Predictor
 
 A web application that predicts short-term stock price movement (UP/DOWN) using a Conv1D-Transformer model trained on technical indicators and FinBERT news sentiment.
@@ -42,13 +53,25 @@ This downloads stock data for 8 tickers (2018–2025), engineers features, optio
 
 Set `RUN_TUNER = False` in `train_v5.py` to skip tuning and use default hyperparameters.
 
-## Running the App
+## Running the Gradio App
 
 ```bash
-python app.py
+python gradio_app.py
 ```
 
-Then open `http://localhost:5000` in your browser.
+Then open the local Gradio URL shown in the terminal.
+
+## Deploying to Hugging Face Spaces
+
+Create a new Space with **Gradio** as the SDK and set the hardware to the
+free option available for your account (for a free personal account, this may
+be ZeroGPU). Upload the repository contents; the Space uses `gradio_app.py` as
+its entry point. The first boot downloads
+`ProsusAI/finbert` unless a local `finbert/` directory is included.
+
+The Space needs outbound network access at runtime for Yahoo Finance and
+GoogleNews. If either news source is unavailable, the app falls back to a
+zero sentiment score and still returns a price-based prediction.
 
 ## Usage
 
