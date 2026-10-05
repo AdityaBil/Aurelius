@@ -2229,13 +2229,18 @@ function renderResults(data) {
   if (isCalibrated) {
     animateNumber(cv, 0, Number(confidence), 1200, v => v.toFixed(1) + '%');
   } else {
-    cv.textContent = '—';
+    const rawScore = Number(data.model_score ?? data.raw_model_score);
+    if (Number.isFinite(rawScore)) {
+      animateNumber(cv, 0, rawScore, 1200, v => v.toFixed(1) + '/100');
+    } else {
+      cv.textContent = '—';
+    }
   }
   const confNote = document.getElementById('confNote');
   if (confNote) {
     confNote.textContent = isCalibrated
       ? 'CALIBRATED HOLDOUT CONFIDENCE'
-      : 'UNCALIBRATED — CONFIDENCE WITHHELD';
+      : 'RAW MODEL SCORE — NOT A PROBABILITY';
   }
 
   // Sentiment
@@ -2324,7 +2329,7 @@ function renderResults(data) {
       `Model Signal: ${signalLabel}. ` +
       (isCalibrated
         ? `Calibrated holdout confidence: ${Number(confidence).toFixed(1)}%. `
-        : 'Confidence is withheld because this model has no matched calibration. ') +
+        : `Raw model score: ${Number(data.model_score ?? data.raw_model_score).toFixed(1)}/100 (not a probability). `) +
       `News sentiment: ${tagLabel} (FinBERT score ${score.toFixed(3)}). ` +
       `${rsiMsg} ${macdMsg}${volMsg ? ' ' + volMsg : ''}`;
   }
