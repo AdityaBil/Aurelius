@@ -853,6 +853,10 @@
       border-color: var(--red);
       box-shadow: 0 0 30px rgba(255,71,87,0.3), inset 0 0 20px rgba(255,71,87,0.1);
     }
+    .signal-ring.neutral {
+      border-color: var(--amber);
+      box-shadow: 0 0 30px rgba(255,184,77,0.25), inset 0 0 20px rgba(255,184,77,0.08);
+    }
     @keyframes pulseRing {
       0%,100% { box-shadow: 0 0 20px rgba(0,255,156,0.2), inset 0 0 10px rgba(0,255,156,0.05); }
       50% { box-shadow: 0 0 40px rgba(0,255,156,0.5), inset 0 0 30px rgba(0,255,156,0.15); }
@@ -865,6 +869,7 @@
     }
     .signal-text.up { color: var(--green); }
     .signal-text.down { color: var(--red); }
+    .signal-text.neutral { color: var(--amber); }
     .confidence-display {
       text-align: center;
     }
@@ -875,6 +880,7 @@
     }
     .conf-value.up { color: var(--green); text-shadow: var(--glow-g); }
     .conf-value.down { color: var(--red); }
+    .conf-value.neutral { color: var(--amber); }
     .conf-label {
       font-family: var(--mono);
       font-size: 9px;
@@ -1613,7 +1619,7 @@
           <div class="confidence-display" style="flex:1;">
             <div class="conf-label">MODEL CONFIDENCE</div>
             <div class="conf-value" id="confValue">--%</div>
-            <div style="font-family:var(--mono);font-size:9px;color:var(--text-muted);margin-top:4px;letter-spacing:1px;" id="confNote">MODEL CONFIDENCE (SIGMOID PROBABILITY)</div>
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text-muted);margin-top:4px;letter-spacing:1px;" id="confNote">AWAITING CALIBRATED MODEL OUTPUT</div>
           </div>
         </div>
       </div>
@@ -2200,20 +2206,37 @@ function renderResults(data) {
     ms.style.color = open ? 'var(--green)' : 'var(--red)';
   }
 
-  // Signal
-  const isUp = (data.prediction || data.signal) === 'UP';
+  // Signal. A raw classifier score is direction-only until the API confirms
+  // that a calibration artifact matched to the model bundle is active.
+  const signal = (data.prediction || data.signal || 'UNKNOWN').toUpperCase();
+  const isUp = signal === 'UP';
+  const isNeutral = signal === 'NEUTRAL';
+  const signalClass = isNeutral ? 'neutral' : (isUp ? 'up' : 'down');
+  const signalLabel = isNeutral ? 'Neutral' : (isUp ? 'Bullish' : 'Bearish');
   const ring = document.getElementById('signalRing');
   const stext = document.getElementById('signalText');
-  ring.className = 'signal-ring ' + (isUp ? 'up' : 'down');
-  stext.className = 'signal-text ' + (isUp ? 'up' : 'down');
-  stext.textContent = isUp ? 'Bullish' : 'Bearish';
+  ring.className = 'signal-ring ' + signalClass;
+  stext.className = 'signal-text ' + signalClass;
+  stext.textContent = signalLabel;
 
   const sb = document.getElementById('signalBadge');
-  if (sb) sb.style.color = isUp ? 'var(--green)' : 'var(--red)';
+  if (sb) sb.style.color = isNeutral ? 'var(--amber)' : (isUp ? 'var(--green)' : 'var(--red)');
 
   const cv = document.getElementById('confValue');
-  cv.className = 'conf-value ' + (isUp ? 'up' : 'down');
-  animateNumber(cv, 0, data.probability, 1200, v => v.toFixed(1) + '%');
+  const confidence = data.confidence;
+  const isCalibrated = data.confidence_status === 'calibrated' && Number.isFinite(Number(confidence));
+  cv.className = 'conf-value ' + signalClass;
+  if (isCalibrated) {
+    animateNumber(cv, 0, Number(confidence), 1200, v => v.toFixed(1) + '%');
+  } else {
+    cv.textContent = '—';
+  }
+  const confNote = document.getElementById('confNote');
+  if (confNote) {
+    confNote.textContent = isCalibrated
+      ? 'CALIBRATED HOLDOUT CONFIDENCE'
+      : 'UNCALIBRATED — CONFIDENCE WITHHELD';
+  }
 
   // Sentiment
   const score = (data.sentiment_score !== undefined ? data.sentiment_score : data.avg_sentiment) || 0;
@@ -2276,7 +2299,6 @@ function renderResults(data) {
   }
 
   // Prediction reasoning (simple, transparent, UI-only)
-  const confidence = (data.probability ?? 0);
   const rsi = (data.rsi != null) ? Number(data.rsi) : null;
   const macd = (data.macd != null) ? Number(data.macd) : null;
   const bbw = (data.bb_width != null) ? Number(data.bb_width) : null;
@@ -2299,8 +2321,10 @@ function renderResults(data) {
   const pr = document.getElementById('predictionReasoning');
   if (pr) {
     pr.textContent =
-      `Model Signal: ${isUp ? 'Bullish' : 'Bearish'} ` +
-      `(${Number(confidence).toFixed(1)}% Model Confidence). ` +
+      `Model Signal: ${signalLabel}. ` +
+      (isCalibrated
+        ? `Calibrated holdout confidence: ${Number(confidence).toFixed(1)}%. `
+        : 'Confidence is withheld because this model has no matched calibration. ') +
       `News sentiment: ${tagLabel} (FinBERT score ${score.toFixed(3)}). ` +
       `${rsiMsg} ${macdMsg}${volMsg ? ' ' + volMsg : ''}`;
   }
